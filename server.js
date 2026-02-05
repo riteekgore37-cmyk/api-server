@@ -8,7 +8,6 @@ const app = express();
 app.use(express.json());
 app.use(cors());
 
-// ONLINE MYSQL CONNECTION (Render Env Variables)
 const db = mysql.createConnection({
   host: process.env.DB_HOST,
   user: process.env.DB_USER,
@@ -17,70 +16,52 @@ const db = mysql.createConnection({
   port: 3306
 });
 
-// Connect DB
 db.connect(err => {
-  if (err) {
-    console.error("MySQL error:", err);
-    return;
-  }
+  if (err) return console.log(err);
   console.log("MySQL Connected");
 });
 
-// ROOT TEST
-app.get("/", (req, res) => {
+app.get("/", (req,res)=>{
   res.send("API Server Running");
 });
 
-// REGISTER
-app.post("/register", async (req, res) => {
-  const { name, email, password } = req.body;
+app.post("/register", (req,res)=>{
+  const {name,email,password}=req.body;
 
-  if (!name || !email || !password) {
-    return res.json({ success: false, message: "Missing fields" });
-  }
+  if(!name||!email||!password)
+    return res.json({success:false});
 
-  try {
-    const hash = await bcrypt.hash(password, 10);
+  db.query("SELECT id FROM users WHERE email=?",[email], async(err,r)=>{
+    if(r.length>0)
+      return res.json({success:false,message:"Email exists"});
+
+    const hash = await bcrypt.hash(password,10);
 
     db.query(
       "INSERT INTO users(name,email,password) VALUES(?,?,?)",
-      [name, email, hash],
-      (err) => {
-        if (err) return res.json(err);
-        res.json({ success: true });
+      [name,email,hash],
+      ()=>{
+        res.json({success:true});
       }
     );
-  } catch (e) {
-    res.json({ success: false });
-  }
+  });
 });
 
-// LOGIN
-app.post("/login", (req, res) => {
-  const { email, password } = req.body;
+app.post("/login",(req,res)=>{
+  const {email,password}=req.body;
 
-  db.query(
-    "SELECT * FROM users WHERE email=?",
-    [email],
-    async (err, result) => {
-      if (err) return res.json(err);
+  db.query("SELECT * FROM users WHERE email=?",[email],async(err,r)=>{
+    if(r.length===0)
+      return res.json({success:false});
 
-      if (result.length === 0)
-        return res.json({ success: false, message: "User not found" });
+    const ok = await bcrypt.compare(password,r[0].password);
 
-      const match = await bcrypt.compare(password, result[0].password);
+    if(!ok) return res.json({success:false});
 
-      if (!match)
-        return res.json({ success: false, message: "Wrong password" });
-
-      res.json({ success: true });
-    }
-  );
+    res.json({success:true});
+  });
 });
 
-// PORT FOR RENDER
-const PORT = process.env.PORT || 3000;
-
-app.listen(PORT, () => {
-  console.log("Server running on port", PORT);
+app.listen(process.env.PORT||3000,()=>{
+  console.log("Server running");
 });
